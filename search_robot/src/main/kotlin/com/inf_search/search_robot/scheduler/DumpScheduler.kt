@@ -15,7 +15,7 @@ class DumpScheduler(
     private val documentRepo: DocumentRepo
 ) {
     private val timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss")
-    private val BATCH_SIZE = 1000 // Размер пачки для защиты памяти
+    private val BATCH_SIZE = 1000 
 
     @Scheduled(fixedRate = 3600000)
     fun scheduledDump() {
@@ -48,27 +48,23 @@ class DumpScheduler(
 
                     page.content.forEach { doc ->
                         val html = doc.htmlRaw
-                        // Берем ID как заголовок (как вы просили)
                         val docId = doc.id
 
                         if (!html.isNullOrBlank()) {
                             val plainText = Jsoup.parse(html).text()
 
-                            // --- НАЧАЛО ЗАПИСИ В ВАШЕМ ФОРМАТЕ ---
                             writer.write("==DOC_START==\n")
-                            writer.write("$docId\n")         // Заголовок (ID)
+                            writer.write("$docId\n")         
                             writer.write("==CONTENT_START==\n")
-                            writer.write(plainText)          // Текст
-                            writer.write("\n")               // Перенос строки после текста
+                            writer.write(plainText)          
+                            writer.write("\n")               
                             writer.write("==DOC_END==\n")
-                            writer.write("\n")               // Пустая строка между документами для красоты
-                            // --- КОНЕЦ ЗАПИСИ ---
+                            writer.write("\n")               
                         }
                     }
 
                     totalDocsProcessed += page.numberOfElements
 
-                    // Сбрасываем буфер на диск каждые 10 страниц, чтобы очистить память
                     if (pageNumber % 10 == 0) {
                         println("Processed $totalDocsProcessed documents...")
                         writer.flush()
