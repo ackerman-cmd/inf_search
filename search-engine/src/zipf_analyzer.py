@@ -6,12 +6,10 @@ import os
 
 
 def fit_zipf(ranks, freqs):
-    # Zipf: f = C / r^a  => log f = log C - a log r
     x = np.log(ranks)
     y = np.log(freqs)
 
-    # линейная регрессия y = b0 + b1*x
-    # b1 = -a, b0 = log C
+
     A = np.vstack([np.ones_like(x), x]).T
     b0, b1 = np.linalg.lstsq(A, y, rcond=None)[0]
     a = -b1
@@ -22,21 +20,11 @@ def fit_zipf(ranks, freqs):
 
 
 def fit_mandelbrot(ranks, freqs, b_min=0.0, b_max=2000.0, b_steps=200):
-    """
-    Mandelbrot: f(r) = C / (r + B)^a
-      log f = log C - a * log(r + B)
-
-    Подбор:
-    - перебор B по сетке
-    - для каждого B линейная регрессия по log(r+B)
-    - выбираем B с минимальной SSE в log-пространстве
-    """
     y = np.log(freqs)
 
     best = None
     best_sse = np.inf
 
-    # сетка B: для больших корпусов B может быть сотни/тысячи
     Bs = np.linspace(b_min, b_max, b_steps)
 
     for B in Bs:
@@ -78,7 +66,6 @@ def analyze_zipf(csv_file='results/frequencies.csv',
     print("Анализ закона Ципфа / Мандельброта...")
     df = pd.read_csv(csv_file)
 
-    # ВАЖНО: берем все слова (или ограничиваем max_points)
     if not use_all:
         top_n = min(1000, len(df))
         df = df.head(top_n)
@@ -89,31 +76,26 @@ def analyze_zipf(csv_file='results/frequencies.csv',
     ranks = df['Rank'].to_numpy(dtype=np.float64)
     freqs = df['Frequency'].to_numpy(dtype=np.float64)
 
-    # защита от нулей (обычно их нет)
     mask = freqs > 0
     ranks = ranks[mask]
     freqs = freqs[mask]
 
-    # ===== Zipf fit (обобщённый, с показателем a) =====
+  
     zipf_C, zipf_a, zipf_pred = fit_zipf(ranks, freqs)
     zipf_r2 = r2_logspace(freqs, zipf_pred)
 
-    # ===== Mandelbrot fit =====
     mand_res = None
     if mandelbrot:
-        # Диапазон B можно подстроить:
-        # для корпуса 30–50k документов обычно разумно 0..2000
+        
         mC, mA, mB, m_pred, m_sse = fit_mandelbrot(
             ranks, freqs, b_min=0.0, b_max=2000.0, b_steps=250
         )
         m_r2 = r2_logspace(freqs, m_pred)
         mand_res = (mC, mA, mB, m_pred, m_r2)
 
-    # ===== Plot (логарифмические оси) =====
     plt.figure(figsize=(12, 8))
 
-    # Все точки — может быть очень много. Для красоты можно подсэмплировать хвост,
-    # но ты просила "желательно для всех" — рисуем все (или ограниченные max_points).
+  
     plt.scatter(ranks, freqs, alpha=0.35, s=6, label=f'Данные ({len(freqs):,} слов)')
 
     plt.plot(ranks, zipf_pred, linewidth=2, label=f'Zipf: f=C/r^a, a={zipf_a:.3f}, R²={zipf_r2:.4f}')
@@ -137,7 +119,6 @@ def analyze_zipf(csv_file='results/frequencies.csv',
     plt.savefig('results/zipf_mandelbrot.pdf')
 
 
-    # ===== Save report =====
     with open('results/zipf_analysis.txt', 'w', encoding='utf-8') as f:
         f.write("=== ZIPF / MANDELBROT ANALYSIS ===\n")
         f.write(f"Unique words used: {len(freqs)}\n")
@@ -178,5 +159,4 @@ def analyze_zipf(csv_file='results/frequencies.csv',
 
 if __name__ == "__main__":
     csv_file = sys.argv[1] if len(sys.argv) > 1 else 'results/frequencies.csv'
-    # По умолчанию строим по всем словам; если очень тяжело — поставь max_points=200000, например
     analyze_zipf(csv_file, use_all=True, max_points=None, mandelbrot=True)
