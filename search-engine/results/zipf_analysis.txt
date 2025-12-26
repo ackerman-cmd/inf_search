@@ -1,0 +1,38 @@
+=== ZIPF / MANDELBROT ANALYSIS ===
+Unique words used: 1270252
+Top frequency: 2330333
+
+ZIPF (generalized): f = C / r^a
+  C = 3.736833e+07
+  a = 1.276812
+  R2 (log-space) = 0.952228
+
+MANDELBROT: f = C / (r + B)^a
+  C = 3.765107e+07
+  a = 1.277381
+  B = 8.032129
+  R2 (log-space) = 0.952252
+
+Top-20 words:
+Rank    Frequency   Word
+------------------------------------------------------------
+1       2330333     the
+2       1558664     of
+3       1188182     and
+4       877627      in
+5       729989      to
+6       354538      qe
+7       353452      is
+8       331731      from
+9       322565      on
+10      302948      for
+11      257632      by
+12      240619      as
+13      221239      with
+14      206294      that
+15      187105      this
+16      184257      10
+17      181981      edit
+18      176951      retrieved
+19      174153      at
+20      157003      are

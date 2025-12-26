@@ -1,0 +1,78 @@
+robot:
+  db:
+    uri: "mongodb://localhost:27017"
+    database: "corpus"
+    documentsCollection: "documents"
+    frontierCollection: "frontier"
+
+  logic:
+    requestDelayMs: 5000
+    recrawlAfterHours: 168
+    maxRetries: 2
+    connectTimeoutSec: 10
+    readTimeoutSec: 20
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    enableRecrawl: false
+    stopWhenTargetsReached: false
+
+  sources:
+    # --- 1. Wikipedia: Геология и науки о Земле ---
+    - name: "wiki_earth_sciences_en"
+      allowedHosts: ["en.wikipedia.org"]
+      seeds: ["https://en.wikipedia.org/wiki/Category:Earth_sciences"]
+      targetArticles: 20000
+      wikiStrictOneCategory: true
+      pageAllowPatterns:
+        - "^https://en\\.wikipedia\\.org/wiki/Category:.*$"
+        - "^https://en\\.wikipedia\\.org/w/index\\.php\\?title=Category:.*$"
+      articleAllowPatterns:
+        - "^https://en\\.wikipedia\\.org/wiki/[^:#?]+$"
+      denyPatterns:
+        - ".*(action=edit|action=history|action=info|printable=yes|oldid=|diff=).*"
+        - "^https://en\\.wikipedia\\.org/wiki/(Help|File|Template|Portal|Special|Talk|User|Wikipedia):.*$"
+        - ".*\\.(jpg|jpeg|png|gif|svg|webp|pdf)$"
+
+    # --- 2. USGS: Научные отчеты и публикации ---
+    - name: "usgs_geology"
+      allowedHosts: ["pubs.usgs.gov", "pubs.er.usgs.gov", "doi.org", "dx.doi.org"]
+      seeds: ["https://pubs.usgs.gov/search?q=geology"]
+      seedPagination:
+        template: "https://pubs.usgs.gov/search?q=geology&page={page}"
+        start: 1
+        end: 250
+      targetArticles: 5000
+      pageAllowPatterns:
+        - "^https?://pubs\\.usgs\\.gov/search.*$"
+        - "^https?://pubs\\.usgs\\.gov/publication/\\d+/?$"
+        - "^https?://pubs\\.er\\.usgs\\.gov/publication/\\d+/?$"
+      articleAllowPatterns:
+        - "^https?://pubs\\.usgs\\.gov/(fs|sir|ofr|pp|gip|circ|tm|sp|bulletin|wsp|i|mf|gp)/.*$"
+        - "^https?://(dx\\.)?doi\\.org/10\\..*$"
+      denyPatterns:
+        - ".*\\.(pdf|jpg|jpeg|png|gif|zip|ris|xml|xlsx|csv|txt|kmz)$"
+
+    # --- 3. NASA Earth Observatory: Очерки и события ---
+    - name: "nasa_earth_geology"
+      allowedHosts: ["earthobservatory.nasa.gov"]
+      seeds: ["https://earthobservatory.nasa.gov/topic/geology"]
+      targetArticles: 5000
+      pageAllowPatterns:
+        - "^https://earthobservatory\\.nasa\\.gov/topic/geology(\\?p=\\d+)?$"
+      articleAllowPatterns:
+        - "^https://earthobservatory\\.nasa\\.gov/images/\\d+/.*$"
+        - "^https://earthobservatory\\.nasa\\.gov/features/.*$"
+      denyPatterns:
+        - ".*\\.(jpg|jpeg|png|gif|svg|pdf|mp4|mov)$"
+
+    # --- 4. ScienceDaily: Новости геологии ---
+    - name: "sciencedaily_geology"
+      allowedHosts: ["www.sciencedaily.com"]
+      seeds: ["https://www.sciencedaily.com/news/earth_climate/geology/"]
+      targetArticles: 10000
+      pageAllowPatterns:
+        - "^https://www\\.sciencedaily\\.com/news/earth_climate/geology/.*$"
+      articleAllowPatterns:
+        - "^https://www\\.sciencedaily\\.com/releases/\\d+/\\d+/.*\\.htm$"
+      denyPatterns:
+        - ".*\\.(jpg|jpeg|png|gif|pdf|mp4)$"

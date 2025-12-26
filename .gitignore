@@ -1,0 +1,40 @@
+search_robot/HELP.md
+search_robot/.gradle
+search_robot/build/
+!search_robot/gradle/wrapper/gradle-wrapper.jar
+!search_robot/**/src/main/**/build/
+!search_robot/**/src/test/**/build/
+
+### STS ###
+search_robot/.apt_generated
+search_robot/.classpath
+search_robot/.factorypath
+search_robot/.project
+search_robot/.settings
+search_robot/.springBeans
+search_robot/.sts4-cache
+search_robot/bin/
+!search_robot/**/src/main/**/bin/
+!search_robot/**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+search_robot/.idea
+search_robot/*.iws
+search_robot/*.iml
+search_robot/*.ipr
+search_robot/out/
+!search_robot/**/src/main/**/out/
+!search_robot/**/src/test/**/out/
+
+### NetBeans ###
+search_robot/nbproject/private/
+search_robot/nbbuild/
+search_robot/dist/
+search_robot/nbdist/
+search_robot/.nb-gradle/
+
+### VS Code ###
+search_robot/.vscode/
+
+### Kotlin ###
+search_robot/.kotlin
