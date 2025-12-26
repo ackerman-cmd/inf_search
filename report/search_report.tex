@@ -1,0 +1,520 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath,amsfonts,amssymb,amsthm}
+\usepackage{quotmark}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+% --- библиография (подключена, но список ниже дан вручную как в примере) ---
+\usepackage[
+  backend=biber,
+  style=gost-numeric,
+  sorting=none
+]{biblatex}
+\addbibresource{refs.bib}
+
+% --- листинги ---
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  tabsize=2,
+  showstringspaces=false
+}
+
+\begin{document}
+
+% ===================== TITLE =====================
+\begin{titlepage}
+\begin{center}
+\bfseries
+
+{\Large Московский авиационный институт\\ (национальный исследовательский университет)}
+
+\vspace{48pt}
+
+{\large Факультет информационных технологий и прикладной математики}
+
+\vspace{36pt}
+
+{\large Кафедра вычислительной математики и программирования}
+
+\vspace{48pt}
+
+Отчет по лабораторным работам по курсу ``Информационный поиск''
+
+\end{center}
+
+\vspace{72pt}
+
+\begin{flushright}
+\begin{tabular}{rl}
+Студент: & Е.\,А. Медведев\\
+Преподаватель: & А.\,А. Кухтичев\\
+Группа: & М8О-401Б-22\\
+Дата: & 26.12.2025\\
+Оценка: & \\
+Подпись: & \\
+\end{tabular}
+\end{flushright}
+
+\vfill
+
+\begin{center}
+\bfseries
+Москва, \the\year
+\end{center}
+\end{titlepage}
+
+% ===================== TOC =====================
+\tableofcontents
+\newpage
+
+
+% ===================== 1 =====================
+\section{Добыча корпуса документов}
+
+\subsection{Выбор источников и цель корпуса}
+Корпус документов формируется поисковым роботом из открытых англоязычных источников по тематике \textit{Earth Sciences / Geology}:
+\begin{itemize}
+  \item \textbf{Wikipedia (en)}: стартовая категория \texttt{Category:Earth\_sciences} и переходы по страницам категорий и статей;
+  \item \textbf{USGS Publications}: поисковая выдача \texttt{pubs.usgs.gov} по запросу \texttt{geology} с пагинацией;
+  \item \textbf{NASA Earth Observatory}: тематический раздел \texttt{/topic/geology} и статьи/очерки;
+  \item \textbf{ScienceDaily}: раздел новостей \texttt{/news/earth\_climate/geology/} и страницы релизов.
+\end{itemize}
+
+Цель сбора --- получить большой, тематически единый, но стилистически разнообразный корпус (энциклопедические статьи, научные публикации/отчёты, научно-популярные материалы, новости), пригодный для последующих этапов анализа (токенизация, стемминг, закон Ципфа) и построения булевого индекса.
+
+\subsection{Конфигурация сбора}
+Сбор настраивается YAML-конфигурацией \texttt{application.yaml}. Основные параметры:
+
+\begin{itemize}
+  \item \textbf{MongoDB}: \texttt{uri=mongodb://localhost:27017}, база \texttt{corpus}, коллекции \texttt{documents} и \texttt{frontier};
+  \item \textbf{Сетевые ограничения}: \texttt{connectTimeoutSec=10}, \texttt{readTimeoutSec=20};
+  \item \textbf{Ограничение нагрузки}: \texttt{requestDelayMs=5000};
+  \item \textbf{Повторы}: \texttt{maxRetries=2};
+  \item \textbf{User-Agent}: строка браузера (Chrome/120) для корректной совместимости;
+  \item \textbf{Опции обхода}: \texttt{enableRecrawl=false}, \texttt{stopWhenTargetsReached=false};
+  \item \textbf{Источники}: массив \texttt{sources[]} со списком seed URL, разрешённых хостов и регулярных выражений для допустимых/запрещённых ссылок.
+\end{itemize}
+
+\subsection{Формирование списка URL (seed) и правила обхода}
+Для каждого источника задаются стартовые URL (seed) и правила фильтрации:
+
+\paragraph{Wikipedia (категории и статьи).}
+Разрешённые страницы категорий задаются паттернами вида:
+\[
+\texttt{\^https://en\.wikipedia\.org/wiki/Category:.*\$}
+\]
+Разрешённые статьи отбираются регулярным выражением:
+\[
+\texttt{\^https://en\.wikipedia\.org/wiki/[^:\#?]+\$}
+\]
+Запрещаются служебные страницы (Help, File, Template, Special, Talk, User, Wikipedia), а также страницы с параметрами (edit/history/diff/oldid) и медиа-файлы.
+
+\paragraph{USGS (поиск + карточки публикаций + DOI).}
+Используется seed \texttt{https://pubs.usgs.gov/search?q=geology} и пагинация:
+\[
+\texttt{https://pubs.usgs.gov/search?q=geology\&page=\{page\}}
+\]
+для диапазона \texttt{1..250}. Разрешаются страницы поиска и карточки публикаций (\texttt{/publication/<id>}), а в качестве статей --- ссылки на отчёты/серии (fs, sir, ofr, pp, circ, bulletin и т.д.) и DOI (через \texttt{doi.org}).
+
+\paragraph{NASA Earth Observatory.}
+Seed \texttt{https://earthobservatory.nasa.gov/topic/geology}. Допускаются страницы темы и материалы форматов \texttt{/images/<id>/...} и \texttt{/features/...}. Запрещаются медиа-файлы (jpg/png/pdf/mp4).
+
+\paragraph{ScienceDaily.}
+Seed \texttt{https://www.sciencedaily.com/news/earth\_climate/geology/}. В качестве статей допускаются страницы релизов:
+\[
+\texttt{\^https://www\.sciencedaily\.com/releases/\d+/\d+/.*\.htm\$}
+\]
+
+\subsection{Сохранение в MongoDB}
+Хранилище состоит из двух основных коллекций:
+
+\begin{itemize}
+  \item \textbf{\texttt{frontier}} --- очередь задач на обработку URL (планирование обхода);
+  \item \textbf{\texttt{documents}} --- загруженные документы и метаданные.
+\end{itemize}
+
+Концептуально (на уровне требований к данным) документ в \texttt{documents} содержит:
+\begin{itemize}
+  \item \texttt{url}, \texttt{source}, \texttt{fetchedAt};
+  \item \texttt{statusCode} и данные об ошибке (если была);
+  \item \texttt{etag}, \texttt{lastModified} (если предоставляет сервер);
+  \item \texttt{contentHash} (контроль изменений);
+  \item \texttt{rawContent} (HTML/текст, в зависимости от обработчика).
+\end{itemize}
+
+Запись frontier-задачи в \texttt{frontier} содержит:
+\begin{itemize}
+  \item \texttt{url}, \texttt{source};
+  \item \texttt{status} (\textit{pending/in\_progress/done/failed});
+  \item \texttt{attempts} (число попыток);
+  \item \texttt{nextFetchAt} (время, когда задачу можно брать снова);
+  \item служебные timestamps.
+\end{itemize}
+
+\subsection{Связь краулера и офлайнового пайплайна}
+После накопления корпуса в MongoDB выполняется выгрузка в файловый формат, используемый последующими утилитами (токенизация, индексирование). Офлайновая часть работает с текстовым файлом \texttt{data/corpus.txt} и далее строит статистики и индекс:
+\[
+\texttt{corpus.txt} \rightarrow \texttt{tokenizer} \rightarrow \texttt{zipf\_analyzer.py} \rightarrow \texttt{index\_builder} \rightarrow \texttt{search}
+\]
+Разделение на онлайн-сбор и офлайн-анализ упрощает повторяемость экспериментов: можно фиксировать срез корпуса и многократно прогонять анализ с разными параметрами токенизации/поиска.
+
+
+\newpage
+
+% ===================== 2 =====================
+\section{Поисковый робот}
+
+\subsection{Общая схема}
+Поисковый робот реализован на Kotlin с использованием Spring Boot и MongoDB. Внутренняя логика построена как конвейер (pipeline) из двух потоков работ:
+
+\begin{enumerate}
+  \item \textbf{Discoverer} (обнаружение ссылок): извлекает новые URL со страниц, фильтрует их по правилам источника и добавляет в \texttt{frontier}.
+  \item \textbf{Fetcher} (загрузка контента): получает задачи из \texttt{frontier}, выполняет HTTP-загрузку и сохраняет документ в \texttt{documents}, обновляя статус задачи.
+\end{enumerate}
+
+Такое разделение позволяет независимо масштабировать стадии поиска ссылок и скачивания контента и обеспечивает устойчивость при сетевых сбоях.
+
+\subsection{Компоненты и структура проекта}
+Ключевые компоненты проекта:
+
+\begin{itemize}
+  \item \texttt{SearchRobotApplication.kt} --- точка входа Spring Boot;
+  \item \texttt{robot/CrawlRobot.kt} --- основной orchestrator: управляет стадиями discover/fetch, retries, backoff, статистикой;
+  \item \texttt{robot/FrontierTaskClaimer.kt} --- атомарная выдача задач из очереди (\texttt{frontier});
+  \item \texttt{repository/DocumentRepo.kt, FrontierRepo.kt} --- слой доступа к MongoDB;
+  \item \texttt{net/HttpFetcher.kt} --- HTTP-клиент (таймауты, заголовки, повторные попытки);
+  \item \texttt{config/RobotConfig.kt} --- типизированная конфигурация источников и лимитов;
+  \item \texttt{util/} --- нормализация URL, хеширование, парсинг HTML (Jsoup) и вспомогательные функции;
+  \item \texttt{scheduler/DumpScheduler.kt} --- периодические дампы/бэкапы коллекций.
+\end{itemize}
+
+\subsection{Нормализация URL и дедупликация}
+Для предотвращения дублей и корректного фронтира применяется нормализация URL:
+\begin{itemize}
+  \item приведение схемы/хоста к нижнему регистру;
+  \item удаление фрагмента (\texttt{\#...});
+  \item нормализация относительных ссылок через \texttt{urljoin}-аналог (в Kotlin);
+  \item фильтрация по \texttt{allowedHosts} и регулярным выражениям \texttt{allowPatterns/denyPatterns}.
+\end{itemize}
+
+Дедупликация обеспечивается за счёт уникальности URL (или нормализованного URL) на уровне \texttt{frontier} и \texttt{documents}.
+
+\subsection{Frontier: выдача задач и статусы}
+Очередь задач хранится в MongoDB (\texttt{frontier}). Выдача следующей задачи реализуется компонентом \texttt{FrontierTaskClaimer} атомарной операцией ``claim'':
+задача выбирается по статусу \textit{pending} и условиям доступности, после чего одним запросом переводится в \textit{in\_progress}.
+Это исключает гонки между потоками и обеспечивает, что один URL не будет скачан двумя воркерами одновременно.
+
+\subsection{HTTP-загрузка и уважение к источникам}
+HTTP-загрузка выполняется компонентом \texttt{HttpFetcher} с заданными таймаутами и задержкой \texttt{requestDelayMs=5000} между запросами. Это снижает нагрузку на внешние сайты и повышает устойчивость к временным ограничениям со стороны источников.
+
+\subsection{Resilience: повторы и backoff}
+Для задач, завершившихся ошибкой (сетевые таймауты, временные коды HTTP и т.п.), применяется политика повторов:
+\begin{itemize}
+  \item число повторов ограничено \texttt{maxRetries=2};
+  \item между попытками используется экспоненциальный backoff (увеличение задержки);
+  \item при исчерпании попыток задача помечается как \textit{failed} и исключается из активного потока обработки.
+\end{itemize}
+
+\subsection{Ограничение области обхода (фильтры)}
+Для каждого источника конфигурация задаёт:
+\begin{itemize}
+  \item список допустимых хостов \texttt{allowedHosts};
+  \item регулярные выражения допустимых страниц \texttt{pageAllowPatterns};
+  \item регулярные выражения допустимых статей \texttt{articleAllowPatterns};
+  \item запрещающие паттерны \texttt{denyPatterns} (медиа, служебные страницы, редактирование и т.п.).
+\end{itemize}
+
+Фильтрация решает две задачи: (1) удержание обхода в пределах предметной области, (2) защита от ``мусорных'' URL (медиа, сервисные страницы, параметры редактирования).
+
+\subsection{Результат работы робота}
+Результатом работы робота является накопленная коллекция \texttt{documents} в MongoDB с сохранёнными материалами и метаданными, а также заполненная и обработанная очередь \texttt{frontier}. Далее данные корпуса выгружаются в \texttt{data/corpus.txt} для офлайнового анализа и построения индекса.
+
+
+\newpage
+
+% ===================== 3 =====================
+\section{Стемминг}
+
+\subsection{Назначение стемминга}
+Стемминг используется для приведения словоформ к общей основе (стему), что уменьшает размер словаря и повышает полноту поиска.
+В текущей реализации корпус преимущественно англоязычный, поэтому применяется простой английский rule-based стеммер.
+
+\subsection{Реализация}
+Стеммер реализован в утилите \texttt{src/simple\_stemmer.cpp} и основан на эвристическом удалении распространённых суффиксов и некоторых дополнительных правилах:
+\begin{itemize}
+  \item базовые суффиксы: \texttt{ing}, \texttt{ed}, \texttt{ly}, \texttt{es}, \texttt{s}, \texttt{'s};
+  \item преобразования \texttt{ies/ied} $\rightarrow$ \texttt{y};
+  \item частные случаи для суффиксов \texttt{iness}, \texttt{ization}, \texttt{ational}, \texttt{tional}, \texttt{biliti}, \texttt{fulness}, \texttt{ousness};
+  \item устранение двойных согласных в конце слова (при условии, что это не гласная).
+\end{itemize}
+
+Подход является эвристическим: стеммер не гарантирует получение леммы, но даёт нормализованную основу, удобную для индексирования.
+
+\subsection{Достоинства и ограничения}
+Достоинства:
+\begin{itemize}
+  \item высокая скорость и отсутствие внешних зависимостей;
+  \item заметное сокращение числа уникальных термов в словаре.
+\end{itemize}
+
+Ограничения:
+\begin{itemize}
+  \item не учитывает морфологию и часть речи;
+  \item возможны переусечения (overstemming) и недоусечения (understemming);
+  \item правила ориентированы на английский и требуют адаптации при смене языка корпуса.
+\end{itemize}
+
+
+\newpage
+
+% ===================== 4 =====================
+\section{Закон Ципфа}
+
+\subsection{Суть закона Ципфа для текстов}
+Для текстов естественного языка характерно распределение частот слов, близкое к закону Ципфа:
+\[
+f(r) \approx \frac{C}{r^{s}},
+\]
+где $r$ --- ранг слова (1 для самого частотного), $f(r)$ --- его частота, $C$ --- константа, $s \approx 1$.
+
+Проверка закона Ципфа на собранном корпусе позволяет:
+\begin{itemize}
+  \item оценить ``естественность'' распределения частот;
+  \item увидеть долю высокочастотных служебных слов;
+  \item оценить объём длинного хвоста редких термов (разреженность словаря).
+\end{itemize}
+
+\subsection{Формирование распределения частот}
+Распределение частот формируется C++-утилитой \texttt{tokenizer} (файл \texttt{src/tokenizer.cpp}). Утилита:
+\begin{itemize}
+  \item читает корпус из \texttt{data/corpus.txt};
+  \item выделяет токены как последовательности \texttt{isalnum} символов;
+  \item приводит токены к нижнему регистру;
+  \item отбрасывает токены длиной менее 2 символов;
+  \item собирает частотную таблицу на собственной хэш-таблице фиксированного размера.
+\end{itemize}
+
+Результат записывается в CSV \texttt{results/frequencies.csv} формата:
+\[
+\texttt{Rank,Frequency,Word}.
+\]
+
+Дополнительно утилита формирует файл статистики \texttt{results/stats.txt} (объём входа, число токенов, число уникальных слов, средняя длина токена, время работы).
+
+\subsection{Аппроксимация параметров закона Ципфа}
+Анализ распределения и оценка параметров выполняются Python-скриптом \texttt{src/zipf\_analyzer.py}.
+Для оценки $s$ используется логарифмирование:
+\[
+\ln f = \ln C - s \ln r,
+\]
+что сводится к линейной регрессии в координатах $(\ln r, \ln f)$.
+
+\subsection{Визуализация}
+
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\textwidth]{zipf.png}
+\caption{Распределение частот терминов корпуса и аппроксимация законом Ципфа}
+\label{fig:zipf}
+\end{figure}
+
+На рисунке показано распределение частот слов корпуса в логарифмических координатах 
+(по оси абсцисс отложен ранг слова \(r\), по оси ординат — частота его встречаемости \(f(r)\)). 
+Экспериментальные точки образуют характерную для естественного языка картину: 
+небольшое число высокочастотных слов при малых рангах и длинный ``хвост'' редких термов 
+при больших значениях \(r\), где частоты убывают на несколько порядков.
+
+Поверх эмпирических данных приведены аппроксимации законом Ципфа
+\[
+f(r) = C r^{-a}
+\]
+и законом Мандельброта
+\[
+f(r) = \frac{C}{(r + B)^{a}}.
+\]
+Оценённый показатель степени \(a \approx 1.277\) близок к типичным значениям для крупных текстовых корпусов.
+Качество аппроксимации является высоким: коэффициент детерминации составляет
+\(R^{2} \approx 0.952\) для закона Ципфа и немного больше для модели Мандельброта.
+
+На среднем диапазоне рангов аппроксимирующие кривые хорошо согласуются с экспериментальными данными,
+что подтверждает выполнение закона Ципфа для данного корпуса.
+Отклонения в области малых рангов объясняются высокой долей наиболее частотных служебных слов
+и особенностями тематики корпуса, тогда как расхождения в правой части распределения
+связаны с наличием большого числа редких слов и дискретным характером частот
+(ступенчатость ``хвоста'' распределения).
+
+
+
+\newpage
+
+% ===================== 5 =====================
+\section{Булев индекс и поиск}
+
+\subsection{Нулевая модель булевого поиска}
+Реализован булев поиск в нулевой модели информационного поиска: документ либо удовлетворяет запросу, либо нет; веса термов и ранжирование не вычисляются.
+Основной акцент сделан на эффективной реализации постинг-листов и операций над ними.
+
+\subsection{Построение индекса (инвертированный файл)}
+Построение индекса выполняется утилитой \texttt{index\_builder} (файл \texttt{src/boolean\_index.cpp}).
+Индекс строится по дампу корпуса в текстовом формате со структурой:
+\begin{verbatim}
+==DOC_START==
+<externalId>
+==CONTENT_START==
+<multiline content>
+==DOC_END==
+\end{verbatim}
+
+Для каждого документа:
+\begin{itemize}
+  \item выделяются токены (алфавитно-цифровые последовательности), приводятся к нижнему регистру;
+  \item внутри документа используется \textbf{уникализация токенов} (сортировка + \texttt{unique});
+  \item для каждого токена в хэш-таблице добавляется \texttt{doc\_id} в постинг-лист.
+\end{itemize}
+
+Внутренняя структура отображения \texttt{term $\rightarrow$ postings} реализована как собственная хэш-таблица \texttt{SimpleHashMap} (цепочки в бакетах).
+Постинг-лист хранится как \texttt{vector<int>} и остаётся отсортированным благодаря монотонно возрастающему \texttt{doc\_id}.
+
+\subsection{Формат индексного файла}
+Утилита сохраняет индекс в файл \texttt{data/boolean\_index.idx} в текстовом формате:
+
+\begin{verbatim}
+DOCS
+<N>
+doc_id|title|preview
+...
+TERMS
+<M>
+term|docid,docid,docid
+...
+\end{verbatim}
+
+Где:
+\begin{itemize}
+  \item \texttt{title} соответствует \texttt{externalId} из дампа;
+  \item \texttt{preview} --- первые 200 символов контента (с заменой переводов строк на пробел).
+\end{itemize}
+
+\subsection{Операции над постинг-листами}
+Поисковый модуль \texttt{search} (файл \texttt{src/boolean\_search.cpp}) поддерживает операции:
+\begin{itemize}
+  \item \textbf{AND} --- пересечение постинг-листов алгоритмом двух указателей (two-pointer);
+  \item \textbf{OR} --- объединение двух отсортированных списков с устранением дублей;
+  \item \textbf{NOT} --- дополнение списка относительно множества всех \texttt{doc\_id}.
+\end{itemize}
+
+Все операции выполняются за линейное время от суммарной длины входных списков.
+
+\subsection{Обработка запросов}
+Запрос токенизируется по пробелам. Поддерживаются формы:
+\begin{itemize}
+  \item \texttt{word1 word2} --- неявный AND по всем словам;
+  \item \texttt{word1 AND word2};
+  \item \texttt{word1 OR word2};
+  \item \texttt{NOT word}.
+\end{itemize}
+
+В случае более сложной строки без корректного парсинга операторов применяется режим ``fallback'': игнорируются служебные токены \texttt{and/or/not}, а остальные термы пересекаются как AND.
+
+
+\newpage
+
+% ===================== 6 =====================
+\section{Как работает поиск в приложении}
+
+\subsection{Скрипт полного запуска}
+В корне офлайновой части расположен скрипт \texttt{run\_all.sh}, который выполняет полный запуск:
+\begin{enumerate}
+  \item компиляция C++-утилит (\texttt{compile.sh});
+  \item токенизация корпуса и формирование \texttt{results/frequencies.csv};
+  \item анализ закона Ципфа Python-скриптом;
+  \item построение булевого индекса в \texttt{data/boolean\_index.idx};
+  \item запуск интерактивного поиска.
+\end{enumerate}
+
+\subsection{Сборка утилит}
+Скрипт \texttt{compile.sh} компилирует:
+\begin{itemize}
+  \item \texttt{src/tokenizer.cpp} $\rightarrow$ \texttt{bin/tokenizer};
+  \item \texttt{src/simple\_stemmer.cpp} $\rightarrow$ \texttt{bin/stemmer};
+  \item \texttt{src/boolean\_index.cpp} $\rightarrow$ \texttt{bin/index\_builder};
+  \item \texttt{src/boolean\_search.cpp} $\rightarrow$ \texttt{bin/search}.
+\end{itemize}
+Компиляция выполняется с оптимизацией \texttt{-O2}, стандартом \texttt{-std=c++11} и проверкой кода возврата каждого шага.
+
+\subsection{Интерактивный режим}
+Утилита \texttt{search} загружает индекс \texttt{data/boolean\_index.idx} и запускает цикл чтения запросов.
+На каждый запрос:
+\begin{itemize}
+  \item выполняется токенизация и интерпретация операторов;
+  \item вычисляется результат (список \texttt{doc\_id});
+  \item выводятся метаданные (external id) и preview первых документов;
+  \item дополнительно измеряется время выполнения запроса (мс).
+\end{itemize}
+
+\subsection{Демонстрация работы}
+Ниже предоставлены результаты работы программы).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{interact.jpg}
+\caption{Панель при запуске интерактивного поиска}
+\label{fig:search_example_01}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{example1.jpg}
+\caption{Пример выполнения запроса и вывод результатов(выводится список подходящих документов + превью текста с совпадениями)}
+\label{fig:search_example_01}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{example2.jpg}
+\caption{Пример выполнения запроса и вывод результатов(выводится список подходящих документов + превью текста с совпадениями)}
+\label{fig:search_example_02}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{example3.jpg}
+\caption{Пример выполнения запроса и вывод результатов(выводится список подходящих документов + превью текста с совпадениями)}
+\label{fig:search_example_02}
+\end{figure}
+
+
+\newpage
+
+% ===================== 7 =====================
+\section{Выводы}
+В ходе выполнения лабораторных работ был реализован базовый конвейер информационного поиска: сбор корпуса документов, формирование частотных статистик и проверка закона Ципфа, построение булевого индекса и выполнение поисковых запросов.
+
+Разработан поисковый робот на Kotlin/Spring Boot с хранением данных в MongoDB. Реализация поддерживает управление очередью URL (frontier), многопоточную обработку стадий discover/fetch, конфигурирование источников и resilient-поведение (повторы, backoff, фиксация ошибок).
+
+Офлайновая часть реализована в виде набора утилит на C++ и Python-скрипта анализа. Построен инвертированный индекс с хранением постинг-листов в собственных структурах данных; реализованы операции булевого поиска AND/OR/NOT и интерактивный режим работы.
+
+Система может служить основой для дальнейшего расширения: усложнение парсинга булевых выражений (скобки, приоритеты), введение ранжирования (TF--IDF/BM25), улучшение нормализации токенов и более строгая обработка языка корпуса.
+
+
+% ===================== 8 =====================
+\section{Список литературы}
+
+1.~Солтон~Дж., Макгилл~М. Введение в современный информационный поиск.~— М.: Мир, 1983.~— 416~с.
+
+2.~Кузнецов~С.~Д. Основы информационного поиска.~— М.: Физматлит, 2009.~— 320~с.
+
+3.~Мэннинг~К., Рагхаван~П., Шютце~Х. Введение в информационный поиск.~— М.: Диалектика, 2011.~— 528~с.
+
+\end{document}

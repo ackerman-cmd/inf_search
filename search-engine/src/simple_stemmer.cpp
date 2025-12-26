@@ -12,7 +12,6 @@ public:
     string stem(const string& word) {
         string result = word;
         
-        // Простая реализация - удаление окончаний
         string suffixes[] = {"ing", "ed", "ly", "es", "s", "'s"};
         
         for (const auto& suffix : suffixes) {
@@ -22,7 +21,6 @@ public:
             }
         }
         
-        // Дополнительные правила
         if (endsWith(result, "ies") && result.length() > 5) {
             result = result.substr(0, result.length() - 3) + "y";
         } else if (endsWith(result, "ied") && result.length() > 5) {
@@ -43,7 +41,6 @@ public:
             result = result.substr(0, result.length() - 7) + "ous";
         }
         
-        // Удаление двойных согласных
         if (result.length() > 3 && result[result.length()-1] == result[result.length()-2]) {
             char last = tolower(result[result.length()-1]);
             if (!isVowel(last)) {
@@ -90,7 +87,6 @@ void processFile(const string& input_file, const string& output_file) {
     
     string word;
     while (in >> word) {
-        // Очистка слова от знаков препинания
         string clean_word;
         for (char c : word) {
             if (isalnum(c)) clean_word += tolower(c);

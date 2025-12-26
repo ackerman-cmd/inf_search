@@ -149,7 +149,6 @@ public:
         if ((int)titles.size() <= id) titles.resize(id + 1);
         if ((int)previews.size() <= id) previews.resize(id + 1);
         
-        // Ограничиваем preview 200 символами и заменяем переносы строк
         string clean_preview;
         if (content.size() > 200) {
             clean_preview = content.substr(0, 200);
@@ -157,7 +156,6 @@ public:
             clean_preview = content;
         }
         
-        // Заменяем переносы строк в preview
         for (char& c : clean_preview) {
             if (c == '\n' || c == '\r') c = ' ';
         }
@@ -178,23 +176,19 @@ public:
             return false;
         }
         
-        // Записываем заголовок DOCS
         f << "DOCS\n";
         f << titles.size() << "\n";
         
-        // Записываем документы
         for (size_t i = 0; i < titles.size(); ++i) {
             string clean_title = sanitize(titles[i]);
             string clean_preview = sanitize(previews[i]);
             f << i << "|" << clean_title << "|" << clean_preview << "\n";
         }
         
-        // Записываем заголовок TERMS
         f << "TERMS\n";
         auto all = index.getAll();
         f << all.size() << "\n";
         
-        // Записываем термины
         for (auto& e : all) {
             f << e.first << "|";
             for (size_t i = 0; i < e.second.size(); ++i) {

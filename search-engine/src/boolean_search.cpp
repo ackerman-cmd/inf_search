@@ -10,14 +10,12 @@
 using namespace std;
 using namespace std::chrono;
 
-// ======================
-// Own hash map: term -> posting list
-// ======================
+
 class SimpleHashMap {
 private:
     struct Node {
         string key;
-        vector<int> values; // sorted by construction
+        vector<int> values; 
         Node* next;
         Node(const string& k) : key(k), next(nullptr) {}
     };
@@ -50,7 +48,6 @@ public:
         delete[] table;
     }
 
-    // We assume doc_ids appended in ascending order.
     void add(const string& key, int doc_id) {
         unsigned int h = hashStr(key);
         Node* node = table[h];
@@ -82,16 +79,14 @@ public:
     }
 };
 
-// ======================
-// Boolean Search
-// ======================
+
 class BooleanSearch {
 private:
     SimpleHashMap index;
 
-    // doc_id is internal 0..N-1
-    vector<string> doc_titles;   // externalId
-    vector<string> doc_preview;  // preview
+   
+    vector<string> doc_titles; 
+    vector<string> doc_preview; 
 
     bool loadIndex(const string& filename) {
         ifstream file(filename.c_str());
@@ -102,7 +97,6 @@ private:
 
         string line;
 
-        // DOCS
         if (!getline(file, line) || line != "DOCS") {
             cerr << "Bad index format: missing DOCS\n";
             return false;
@@ -129,7 +123,6 @@ private:
             }
         }
 
-        // TERMS
         if (!getline(file, line) || line != "TERMS") {
             cerr << "Bad index format: missing TERMS\n";
             return false;
@@ -146,7 +139,6 @@ private:
             string term = line.substr(0, p);
             string doc_list_str = line.substr(p + 1);
 
-            // docids are already sorted in file
             stringstream ss(doc_list_str);
             string tok;
             while (getline(ss, tok, ',')) {
@@ -161,7 +153,6 @@ private:
         return true;
     }
 
-    // two-pointer AND
     static vector<int> intersect(const vector<int>& a, const vector<int>& b) {
         vector<int> r;
         r.reserve(min(a.size(), b.size()));
@@ -174,7 +165,6 @@ private:
         return r;
     }
 
-    // two-pointer OR
     static vector<int> unionOp(const vector<int>& a, const vector<int>& b) {
         vector<int> r;
         r.reserve(a.size() + b.size());
@@ -190,7 +180,6 @@ private:
     }
 
     vector<int> notOp(const vector<int>& list) const {
-        // list sorted; produce all doc_ids not in list
         vector<int> r;
         r.reserve(doc_titles.size());
 
@@ -209,12 +198,10 @@ private:
         string t;
 
         while (ss >> t) {
-            // lowercase
             for (size_t i = 0; i < t.size(); ++i) {
                 t[i] = (char)tolower((unsigned char)t[i]);
             }
 
-            // strip punctuation around token
             while (!t.empty() && !isalnum((unsigned char)t.back())) t.pop_back();
             while (!t.empty() && !isalnum((unsigned char)t.front())) t.erase(t.begin());
 
@@ -226,12 +213,7 @@ private:
 public:
     bool init(const string& index_file) { return loadIndex(index_file); }
 
-    // Supported:
-    // - single term
-    // - NOT term
-    // - term1 AND term2
-    // - term1 OR term2
-    // - fallback: multiple terms => AND across all terms (ignores operators)
+   
     vector<int> executeQuery(const string& query) {
         vector<string> tokens = tokenizeQuery(query);
         if (tokens.empty()) return vector<int>();
@@ -251,7 +233,6 @@ public:
             if (tokens[1] == "or")  return unionOp(a, b);
         }
 
-        // Fallback: implicit AND across all non-operator tokens
         vector<int> result;
         bool first = true;
         for (size_t i = 0; i < tokens.size(); ++i) {
@@ -319,13 +300,11 @@ public:
     }
 };
 
-// ======================
 int main(int argc, char* argv[]) {
     BooleanSearch searcher;
     string index_file = "data/boolean_index.idx";
 
     if (argc >= 2) {
-        // allow overriding index file: --index file.idx
         if (string(argv[1]) == "--index" && argc >= 3) {
             index_file = argv[2];
         }
@@ -343,7 +322,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // if query passed as last arg (simple)
     if (argc == 2 && string(argv[1]).rfind("--", 0) != 0) {
         string query = argv[1];
         vector<int> results = searcher.executeQuery(query);
